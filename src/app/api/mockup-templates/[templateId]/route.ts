@@ -23,7 +23,7 @@ export async function GET(request: Request) {
   const templateId = getTemplateId(request);
 
   if (!templateId) {
-    return NextResponse.json({ error: "缺少模板 ID" }, { status: 400 });
+    return NextResponse.json({ error: "缂哄皯妯℃澘 ID" }, { status: 400 });
   }
 
   const supabase = createSupabaseServiceRoleClient();
@@ -38,4 +38,94 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.json({ template: data });
+}
+
+async function getTemplateUsageCount(
+  supabase: ReturnType<typeof createSupabaseServiceRoleClient>,
+  templateId: string,
+) {
+  const { count, error } = await supabase
+    .from("mockup_outputs")
+    .select("id", { count: "exact", head: true })
+    .eq("template_id", templateId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return count ?? 0;
+}
+
+export async function DELETE(request: Request) {
+  const templateId = getTemplateId(request);
+
+  if (!templateId) {
+    return NextResponse.json({ error: "缂哄皯妯℃澘 ID" }, { status: 400 });
+  }
+
+  let body: { dry_run?: unknown; force?: unknown } = {};
+
+  try {
+    body = (await request.json()) as { dry_run?: unknown; force?: unknown };
+  } catch {
+    body = {};
+  }
+
+  const supabase = createSupabaseServiceRoleClient();
+
+  try {
+    const { data: template, error: templateError } = await supabase
+      .from("mockup_templates")
+      .select("id")
+      .eq("id", templateId)
+      .maybeSingle();
+
+    if (templateError) {
+      throw new Error(templateError.message);
+    }
+
+    if (!template) {
+      return NextResponse.json({ error: "妯℃澘涓嶅瓨鍦紝璇峰埛鏂板悗閲嶈瘯" }, { status: 404 });
+    }
+
+    const outputCount = await getTemplateUsageCount(supabase, templateId);
+    const requiresConfirmation = outputCount > 0;
+
+    if (body.dry_run === true) {
+      return NextResponse.json({
+        output_count: outputCount,
+        requires_confirmation: requiresConfirmation,
+      });
+    }
+
+    if (requiresConfirmation && body.force !== true) {
+      return NextResponse.json(
+        {
+          error: "璇ユā鏉垮凡鏈夊鍥剧敓鎴愯褰曪紝鍒犻櫎鍙兘褰卞搷鍘嗗彶濂楀浘銆傛槸鍚︾户缁紵",
+          output_count: outputCount,
+          requires_confirmation: true,
+        },
+        { status: 409 },
+      );
+    }
+
+    const { error: deleteError } = await supabase
+      .from("mockup_templates")
+      .delete()
+      .eq("id", templateId);
+
+    if (deleteError) {
+      throw new Error(deleteError.message);
+    }
+
+    return NextResponse.json({
+      ok: true,
+      output_count: outputCount,
+    });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "鍒犻櫎妯℃澘澶辫触" },
+      { status: 500 },
+    );
+  }
 }
