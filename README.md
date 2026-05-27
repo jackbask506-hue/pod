@@ -110,6 +110,7 @@ supabase/migrations/20260524093000_create_pod_core_tables.sql
 supabase/migrations/20260524094500_create_assets_storage_bucket.sql
 supabase/migrations/20260524101600_make_ai_generations_product_draft_nullable.sql
 supabase/migrations/20260524113000_create_export_records.sql
+supabase/migrations/20260527103000_create_image_derivatives.sql
 ```
 
 这些 migration 会创建 POD 系统第一版需要的基础表：
@@ -122,6 +123,7 @@ supabase/migrations/20260524113000_create_export_records.sql
 - `product_drafts`
 - `ai_generations`
 - `export_records`
+- `image_derivatives`
 
 同时会创建 Supabase Storage bucket：
 

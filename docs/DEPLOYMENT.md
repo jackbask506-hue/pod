@@ -94,6 +94,7 @@ supabase/migrations/20260524093000_create_pod_core_tables.sql
 supabase/migrations/20260524094500_create_assets_storage_bucket.sql
 supabase/migrations/20260524101600_make_ai_generations_product_draft_nullable.sql
 supabase/migrations/20260524113000_create_export_records.sql
+supabase/migrations/20260527103000_create_image_derivatives.sql
 ```
 
 推荐使用 Supabase CLI 执行：

@@ -26,6 +26,16 @@ export const navItems: NavItem[] = [
     description: "批量图片处理任务",
   },
   {
+    title: "印花提取",
+    href: "/print-extraction",
+    description: "提取透明底印花图",
+  },
+  {
+    title: "一键抠图",
+    href: "/cutout",
+    description: "批量移除图片背景",
+  },
+  {
     title: "套图模板",
     href: "/mockup-templates",
     description: "固定商品套图模板",
