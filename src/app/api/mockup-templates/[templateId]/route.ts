@@ -109,6 +109,19 @@ export async function DELETE(request: Request) {
       );
     }
 
+    if (requiresConfirmation) {
+      const { error: detachError } = await supabase
+        .from("mockup_outputs")
+        .update({ template_id: null })
+        .eq("template_id", templateId);
+
+      if (detachError) {
+        throw new Error(
+          `该模板已有套图生成记录，数据库需要允许 mockup_outputs.template_id 为空后才能删除。请先执行 migration 20260527091000_allow_delete_used_mockup_templates.sql。原始错误：${detachError.message}`,
+        );
+      }
+    }
+
     const { error: deleteError } = await supabase
       .from("mockup_templates")
       .delete()
