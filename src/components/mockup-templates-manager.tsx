@@ -52,6 +52,13 @@ type PreviewResponse = {
   previews?: PreviewResult[];
 };
 
+type DeleteTemplateResponse = {
+  error?: string;
+  ok?: boolean;
+  output_count?: number;
+  requires_confirmation?: boolean;
+};
+
 type MockupTemplatesManagerProps = {
   initialError?: string | null;
   initialTemplates: MockupTemplate[];
@@ -101,6 +108,7 @@ export function MockupTemplatesManager({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isUploadingBackgrounds, setIsUploadingBackgrounds] = useState(false);
   const [isPreviewing, setIsPreviewing] = useState(false);
+  const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
 
   const selectedScenes = useMemo(() => selectedTemplate?.scenes ?? [], [selectedTemplate]);
 
@@ -280,6 +288,60 @@ export function MockupTemplatesManager({
     }
   }
 
+  async function deleteTemplate(template: MockupTemplate) {
+    setDeletingTemplateId(template.id);
+    setError(null);
+    setMessage(null);
+
+    try {
+      const checkResponse = await fetch(`/api/mockup-templates/${template.id}`, {
+        body: JSON.stringify({ dry_run: true }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        method: "DELETE",
+      });
+      const checkData = (await checkResponse.json()) as DeleteTemplateResponse;
+
+      if (!checkResponse.ok) {
+        throw new Error(checkData.error ?? "删除检查失败");
+      }
+
+      const confirmed = window.confirm(
+        checkData.requires_confirmation
+          ? "该模板已有套图生成记录，删除可能影响历史套图。是否继续？"
+          : "确定要删除这个套图模板吗？删除后不可恢复。",
+      );
+
+      if (!confirmed) {
+        return;
+      }
+
+      const response = await fetch(`/api/mockup-templates/${template.id}`, {
+        body: JSON.stringify({
+          force: checkData.requires_confirmation === true,
+        }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        method: "DELETE",
+      });
+      const data = (await response.json()) as DeleteTemplateResponse;
+
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error ?? "模板删除失败");
+      }
+
+      setMessage("模板删除成功");
+      setPreviewResults([]);
+      await refreshTemplates();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "模板删除失败");
+    } finally {
+      setDeletingTemplateId(null);
+    }
+  }
+
   return (
     <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
       <div className="space-y-6">
@@ -429,30 +491,46 @@ export function MockupTemplatesManager({
                 const isSelected = selectedTemplate?.id === template.id;
 
                 return (
-                  <button
+                  <div
                     key={template.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedTemplate(template);
-                      setPreviewResults([]);
-                    }}
                     className={[
-                      "block w-full px-5 py-4 text-left transition hover:bg-zinc-50",
+                      "grid gap-3 px-5 py-4 transition sm:grid-cols-[1fr_auto]",
                       isSelected ? "bg-emerald-50/70" : "",
                     ].join(" ")}
                   >
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-zinc-950">{template.name}</p>
-                        <p className="mt-1 text-xs text-zinc-500">
-                          {template.product_type} · {template.scenes.length} 个场景
-                        </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedTemplate(template);
+                        setPreviewResults([]);
+                      }}
+                      className="min-w-0 text-left"
+                    >
+                      <div className="flex flex-wrap items-center gap-3">
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-semibold text-zinc-950">
+                            {template.name}
+                          </span>
+                          <span className="mt-1 block text-xs text-zinc-500">
+                            {template.product_type} · {template.scenes.length} 个场景
+                          </span>
+                        </span>
+                        <span className="rounded-md bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-700">
+                          {template.status}
+                        </span>
                       </div>
-                      <span className="rounded-md bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-700">
-                        {template.status}
-                      </span>
+                    </button>
+                    <div className="flex items-center justify-end">
+                      <button
+                        type="button"
+                        onClick={() => void deleteTemplate(template)}
+                        disabled={deletingTemplateId !== null}
+                        className="rounded-md border border-red-300 px-3 py-2 text-sm font-medium text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:border-zinc-200 disabled:text-zinc-400"
+                      >
+                        {deletingTemplateId === template.id ? "删除中..." : "删除"}
+                      </button>
                     </div>
-                  </button>
+                  </div>
                 );
               })}
             </div>
