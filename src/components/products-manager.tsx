@@ -188,7 +188,7 @@ export function ProductsManager({
         setSelectedProductId("");
       }
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "读取商品草稿失败");
+      setError(requestError instanceof Error ? (requestError.message.includes("fetch") ? "网络请求失败，请将 localhost 加入代理排除列表后重试" : requestError.message) : "读取商品草稿失败");
     } finally {
       setIsRefreshing(false);
     }
@@ -237,7 +237,7 @@ export function ProductsManager({
         }
       }
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "商品草稿创建失败");
+      setError(requestError instanceof Error ? (requestError.message.includes("fetch") ? "网络请求失败，请将 localhost 加入代理排除列表后重试" : requestError.message) : "商品草稿创建失败");
     } finally {
       setIsCreating(false);
     }
@@ -281,7 +281,7 @@ export function ProductsManager({
       setMessage(nextStatus === "ready" ? "商品草稿已标记为 ready" : "商品草稿保存成功");
       await refreshProducts(selectedProduct.id);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "商品草稿保存失败");
+      setError(requestError instanceof Error ? (requestError.message.includes("fetch") ? "网络请求失败，请将 localhost 加入代理排除列表后重试" : requestError.message) : "商品草稿保存失败");
     } finally {
       setIsSaving(false);
     }
@@ -313,7 +313,7 @@ export function ProductsManager({
       setImageZipResult(data);
       setMessage("商品套图 ZIP 已生成");
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "下载商品套图失败");
+      setError(requestError instanceof Error ? (requestError.message.includes("fetch") ? "网络请求失败，请将 localhost 加入代理排除列表后重试" : requestError.message) : "下载商品套图失败");
     } finally {
       setIsDownloadingImages(false);
     }

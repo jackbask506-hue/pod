@@ -230,7 +230,7 @@ export function ImageCollectorManager() {
 
       setTemplates(data.templates ?? []);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "读取采集模板失败");
+      setError(requestError instanceof Error ? (requestError.message.includes("fetch") ? "网络请求失败，请将 localhost 加入代理排除列表后重试" : requestError.message) : "读取采集模板失败");
     } finally {
       setIsLoading(false);
     }
@@ -247,7 +247,7 @@ export function ImageCollectorManager() {
 
       setRuns(data.runs ?? []);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "读取采集历史失败");
+      setError(requestError instanceof Error ? (requestError.message.includes("fetch") ? "网络请求失败，请将 localhost 加入代理排除列表后重试" : requestError.message) : "读取采集历史失败");
     }
   }, []);
 
@@ -322,7 +322,7 @@ export function ImageCollectorManager() {
       resetForm();
       await refreshTemplates();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "保存采集模板失败");
+      setError(requestError instanceof Error ? (requestError.message.includes("fetch") ? "网络请求失败，请将 localhost 加入代理排除列表后重试" : requestError.message) : "保存采集模板失败");
     } finally {
       setIsSaving(false);
     }
@@ -355,7 +355,7 @@ export function ImageCollectorManager() {
       setMessage("采集模板已归档");
       await refreshTemplates();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "归档采集模板失败");
+      setError(requestError instanceof Error ? (requestError.message.includes("fetch") ? "网络请求失败，请将 localhost 加入代理排除列表后重试" : requestError.message) : "归档采集模板失败");
     }
   }
 
@@ -383,7 +383,7 @@ export function ImageCollectorManager() {
 
       await refreshRuns();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "运行采集模板失败");
+      setError(requestError instanceof Error ? (requestError.message.includes("fetch") ? "网络请求失败，请将 localhost 加入代理排除列表后重试" : requestError.message) : "运行采集模板失败");
     } finally {
       setIsRunningId(null);
     }

@@ -9,7 +9,7 @@ export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="flex h-full w-64 shrink-0 flex-col border-r border-zinc-200 bg-white">
+    <aside className="sticky top-0 flex h-screen w-64 shrink-0 flex-col border-r border-zinc-200 bg-white">
       <div className="border-b border-zinc-200 px-6 py-5">
         <p className="text-xs font-semibold uppercase tracking-wide text-emerald-600">
           Internal POD

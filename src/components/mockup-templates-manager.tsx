@@ -199,7 +199,7 @@ export function MockupTemplatesManager({
         return nextTemplates.find((template) => template.id === current.id) ?? nextTemplates[0] ?? null;
       });
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "读取模板失败");
+      setError(requestError instanceof Error ? (requestError.message.includes("fetch") ? "网络请求失败，请将 localhost 加入代理排除列表后重试" : requestError.message) : "读取模板失败");
     } finally {
       setIsRefreshing(false);
     }
@@ -233,7 +233,7 @@ export function MockupTemplatesManager({
 
       setMessage("场景底图上传完成，可插入到 scenes JSON。");
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "底图上传失败");
+      setError(requestError instanceof Error ? (requestError.message.includes("fetch") ? "网络请求失败，请将 localhost 加入代理排除列表后重试" : requestError.message) : "底图上传失败");
     } finally {
       setIsUploadingBackgrounds(false);
     }
@@ -285,7 +285,7 @@ export function MockupTemplatesManager({
       setScenes(sampleToDrafts());
       setMessage("模板保存成功");
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "模板保存失败");
+      setError(requestError instanceof Error ? (requestError.message.includes("fetch") ? "网络请求失败，请将 localhost 加入代理排除列表后重试" : requestError.message) : "模板保存失败");
     } finally {
       setIsSaving(false);
     }
@@ -322,7 +322,7 @@ export function MockupTemplatesManager({
 
       setPreviewResults(data.previews ?? []);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "生成预览失败");
+      setError(requestError instanceof Error ? (requestError.message.includes("fetch") ? "网络请求失败，请将 localhost 加入代理排除列表后重试" : requestError.message) : "生成预览失败");
     } finally {
       setIsPreviewing(false);
     }
@@ -376,7 +376,7 @@ export function MockupTemplatesManager({
       setPreviewResults([]);
       await refreshTemplates();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "模板删除失败");
+      setError(requestError instanceof Error ? (requestError.message.includes("fetch") ? "网络请求失败，请将 localhost 加入代理排除列表后重试" : requestError.message) : "模板删除失败");
     } finally {
       setDeletingTemplateId(null);
     }

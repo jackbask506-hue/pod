@@ -224,7 +224,8 @@ export function AssetsGallery({ initialAssets, initialError = null }: AssetsGall
         return new Set(Array.from(current).filter((id) => visibleIds.has(id)));
       });
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "读取素材失败");
+      const msg = requestError instanceof Error ? requestError.message : "读取素材失败";
+      setError(msg.includes("fetch") ? "网络请求失败，请检查代理设置是否排除了 localhost" : msg);
       setAssets([]);
       setSelectedIds(new Set());
     } finally {

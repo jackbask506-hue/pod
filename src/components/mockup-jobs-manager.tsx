@@ -150,7 +150,7 @@ export function MockupJobsManager({
 
       setJobResult(data.job);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "套图生成失败");
+      setError(requestError instanceof Error ? (requestError.message.includes("fetch") ? "网络请求失败，请将 localhost 加入代理排除列表后重试" : requestError.message) : "套图生成失败");
     } finally {
       setIsGenerating(false);
     }
@@ -181,7 +181,7 @@ export function MockupJobsManager({
         [output.mockup_output_id as string]: data,
       }));
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "下载套图 ZIP 失败");
+      setError(requestError instanceof Error ? (requestError.message.includes("fetch") ? "网络请求失败，请将 localhost 加入代理排除列表后重试" : requestError.message) : "下载套图 ZIP 失败");
     } finally {
       setDownloadingOutputId(null);
     }

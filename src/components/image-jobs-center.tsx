@@ -164,7 +164,7 @@ export function ImageJobsCenter({ initialError = null, initialJobs }: ImageJobsC
         await loadJobDetail(selectedJob.id, false, false);
       }
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "读取任务列表失败");
+      setError(requestError instanceof Error ? (requestError.message.includes("fetch") ? "网络请求失败，请将 localhost 加入代理排除列表后重试" : requestError.message) : "读取任务列表失败");
     } finally {
       setIsRefreshing(false);
     }
@@ -190,7 +190,7 @@ export function ImageJobsCenter({ initialError = null, initialJobs }: ImageJobsC
         setFailedOnly(false);
       }
     } catch (requestError) {
-      setDetailError(requestError instanceof Error ? requestError.message : "读取任务明细失败");
+      setDetailError(requestError instanceof Error ? (requestError.message.includes("fetch") ? "网络请求失败，请将 localhost 加入代理排除列表后重试" : requestError.message) : "读取任务明细失败");
     } finally {
       if (showLoading) {
         setIsDetailLoading(false);
@@ -258,7 +258,7 @@ export function ImageJobsCenter({ initialError = null, initialJobs }: ImageJobsC
       await refreshJobs();
       await loadJobDetail(selectedJob.id, false, false);
     } catch (requestError) {
-      setDetailError(requestError instanceof Error ? requestError.message : "重新执行失败任务失败");
+      setDetailError(requestError instanceof Error ? (requestError.message.includes("fetch") ? "网络请求失败，请将 localhost 加入代理排除列表后重试" : requestError.message) : "重新执行失败任务失败");
     } finally {
       window.clearInterval(pollTimer);
       setIsRetrying(false);

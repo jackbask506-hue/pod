@@ -140,7 +140,7 @@ export function ExportsManager({
         setRecords((current) => [data.record as ExportRecordView, ...current].slice(0, 30));
       }
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "导出失败");
+      setError(requestError instanceof Error ? (requestError.message.includes("fetch") ? "网络请求失败，请将 localhost 加入代理排除列表后重试" : requestError.message) : "导出失败");
     } finally {
       setBusyKind(null);
     }
