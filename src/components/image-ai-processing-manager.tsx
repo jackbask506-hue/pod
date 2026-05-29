@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { fetchAssetsForProcessing } from "@/lib/actions/common";
+
 type ProcessingKind = "cutout" | "print_extraction";
 
 type Asset = {
@@ -149,14 +151,10 @@ export function ImageAiProcessingManager({ initialError = null, kind }: ImageAiP
     setError(null);
 
     try {
-      const response = await fetch("/api/assets", { cache: "no-store" });
-      const data = (await response.json()) as { assets?: Asset[]; error?: string };
+      const data = await fetchAssetsForProcessing();
+      if (data.error) throw new Error(data.error);
 
-      if (!response.ok) {
-        throw new Error(data.error ?? "读取素材列表失败");
-      }
-
-      const nextAssets = data.assets ?? [];
+      const nextAssets = (data.assets ?? []) as Asset[];
       setAssets(nextAssets);
       setSelectedIds((current) => {
         const visibleIds = new Set(nextAssets.map((asset) => asset.id));

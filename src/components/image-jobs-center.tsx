@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from "react";
 
+import { fetchImageJobs, fetchImageJobDetail, retryImageJob } from "@/lib/actions/image-jobs";
+
 export type ImageJobStatus =
   | "pending"
   | "processing"
@@ -151,20 +153,15 @@ export function ImageJobsCenter({ initialError = null, initialJobs }: ImageJobsC
     setError(null);
 
     try {
-      const response = await fetch("/api/image-jobs", { cache: "no-store" });
-      const data = (await response.json()) as JobsResponse;
-
-      if (!response.ok) {
-        throw new Error(data.error ?? "读取任务列表失败");
-      }
-
-      setJobs(data.jobs ?? []);
+      const data = await fetchImageJobs();
+      if (data.error) throw new Error(data.error);
+      setJobs(data.jobs as ImageJob[]);
 
       if (selectedJob) {
         await loadJobDetail(selectedJob.id, false, false);
       }
     } catch (requestError) {
-      setError(requestError instanceof Error ? (requestError.message.includes("fetch") ? "网络请求失败，请将 localhost 加入代理排除列表后重试" : requestError.message) : "读取任务列表失败");
+      setError(requestError instanceof Error ? requestError.message : "读取任务列表失败");
     } finally {
       setIsRefreshing(false);
     }
@@ -178,19 +175,15 @@ export function ImageJobsCenter({ initialError = null, initialJobs }: ImageJobsC
     setDetailError(null);
 
     try {
-      const response = await fetch(`/api/image-jobs/${jobId}`, { cache: "no-store" });
-      const data = (await response.json()) as JobDetailResponse;
+      const data = await fetchImageJobDetail(jobId);
+      if (data.error || !data.job) throw new Error(data.error ?? "读取任务明细失败");
 
-      if (!response.ok || !data.job) {
-        throw new Error(data.error ?? "读取任务明细失败");
-      }
-
-      setSelectedJob(data.job);
+      setSelectedJob(data.job as ImageJobDetail);
       if (resetFilter) {
         setFailedOnly(false);
       }
     } catch (requestError) {
-      setDetailError(requestError instanceof Error ? (requestError.message.includes("fetch") ? "网络请求失败，请将 localhost 加入代理排除列表后重试" : requestError.message) : "读取任务明细失败");
+      setDetailError(requestError instanceof Error ? requestError.message : "读取任务明细失败");
     } finally {
       if (showLoading) {
         setIsDetailLoading(false);
@@ -239,26 +232,14 @@ export function ImageJobsCenter({ initialError = null, initialJobs }: ImageJobsC
     }, 1000);
 
     try {
-      const response = await fetch(`/api/image-jobs/${selectedJob.id}/retry`, {
-        body: JSON.stringify({ item_ids: targetIds }),
-        headers: {
-          "Content-Type": "application/json",
-        },
-        method: "POST",
-      });
-      const data = (await response.json()) as RetryJobResponse;
+      const data = await retryImageJob(selectedJob.id);
+      if (data.error) throw new Error(data.error);
 
-      if (!response.ok || !data.job) {
-        throw new Error(data.error ?? "重新执行失败任务失败");
-      }
-
-      setMessage(
-        `重新执行完成：处理 ${data.job.retried_count} 项，当前成功 ${data.job.success_count} 项，失败 ${data.job.failed_count} 项`,
-      );
+      setMessage("重新执行任务已提交");
       await refreshJobs();
       await loadJobDetail(selectedJob.id, false, false);
     } catch (requestError) {
-      setDetailError(requestError instanceof Error ? (requestError.message.includes("fetch") ? "网络请求失败，请将 localhost 加入代理排除列表后重试" : requestError.message) : "重新执行失败任务失败");
+      setDetailError(requestError instanceof Error ? requestError.message : "重新执行失败任务失败");
     } finally {
       window.clearInterval(pollTimer);
       setIsRetrying(false);

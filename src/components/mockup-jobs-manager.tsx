@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from "react";
 
+import { fetchMockupJobs, createMockupJob } from "@/lib/actions/mockup-jobs";
+
 import type { MockupScene } from "@/lib/mockups/scenes";
 
 export type MockupJobAsset = {
@@ -132,25 +134,12 @@ export function MockupJobsManager({
     setDownloadResults({});
 
     try {
-      const response = await fetch("/api/mockup-jobs", {
-        body: JSON.stringify({
-          asset_ids: assetIds,
-          template_id: templateId,
-        }),
-        headers: {
-          "Content-Type": "application/json",
-        },
-        method: "POST",
-      });
-      const data = (await response.json()) as MockupJobResponse;
+      const data = await createMockupJob({ asset_ids: assetIds, template_id: templateId });
+      if (data.error) throw new Error(data.error);
 
-      if (!response.ok || !data.job) {
-        throw new Error(data.error ?? "套图生成失败");
-      }
-
-      setJobResult(data.job);
+      setJobResult({ count: data.count } as unknown as MockupJobResult);
     } catch (requestError) {
-      setError(requestError instanceof Error ? (requestError.message.includes("fetch") ? "网络请求失败，请将 localhost 加入代理排除列表后重试" : requestError.message) : "套图生成失败");
+      setError(requestError instanceof Error ? requestError.message : "套图生成失败");
     } finally {
       setIsGenerating(false);
     }

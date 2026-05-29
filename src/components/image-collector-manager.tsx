@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { fetchCollectionTemplates, fetchCollectionRuns, saveCollectionTemplate, archiveCollectionTemplate, runCollectionTemplate } from "@/lib/actions/image-collector";
 import type {
   ImageCollectionRun,
   ImageCollectionScheduleFrequency,
@@ -218,19 +219,11 @@ export function ImageCollectorManager() {
     setError(null);
 
     try {
-      const response = await fetch(
-        `/api/image-collector/templates${includeArchived ? "?include_archived=true" : ""}`,
-        { cache: "no-store" },
-      );
-      const data = (await response.json()) as TemplatesResponse;
-
-      if (!response.ok) {
-        throw new Error(data.error ?? "读取采集模板失败");
-      }
-
-      setTemplates(data.templates ?? []);
+      const data = await fetchCollectionTemplates(includeArchived);
+      if (data.error) throw new Error(data.error);
+      setTemplates(data.templates as ImageCollectionTemplate[]);
     } catch (requestError) {
-      setError(requestError instanceof Error ? (requestError.message.includes("fetch") ? "网络请求失败，请将 localhost 加入代理排除列表后重试" : requestError.message) : "读取采集模板失败");
+      setError(requestError instanceof Error ? requestError.message : "读取采集模板失败");
     } finally {
       setIsLoading(false);
     }
@@ -238,16 +231,12 @@ export function ImageCollectorManager() {
 
   const refreshRuns = useCallback(async () => {
     try {
-      const response = await fetch("/api/image-collector/runs", { cache: "no-store" });
-      const data = (await response.json()) as RunsResponse;
+      const data = await fetchCollectionRuns();
+      if (data.error) throw new Error(data.error);
 
-      if (!response.ok) {
-        throw new Error(data.error ?? "读取采集历史失败");
-      }
-
-      setRuns(data.runs ?? []);
+      setRuns(data.runs as RunWithTemplateName[]);
     } catch (requestError) {
-      setError(requestError instanceof Error ? (requestError.message.includes("fetch") ? "网络请求失败，请将 localhost 加入代理排除列表后重试" : requestError.message) : "读取采集历史失败");
+      setError(requestError instanceof Error ? requestError.message : "读取采集历史失败");
     }
   }, []);
 
@@ -302,27 +291,15 @@ export function ImageCollectorManager() {
     setMessage(null);
 
     try {
-      const endpoint = editingId
-        ? `/api/image-collector/templates/${editingId}`
-        : "/api/image-collector/templates";
-      const response = await fetch(endpoint, {
-        body: JSON.stringify(buildPayload(form)),
-        headers: {
-          "Content-Type": "application/json",
-        },
-        method: editingId ? "PATCH" : "POST",
-      });
-      const data = (await response.json()) as SaveTemplateResponse;
-
-      if (!response.ok) {
-        throw new Error(data.error ?? "保存采集模板失败");
-      }
+      const payload = buildPayload(form);
+      const data = await saveCollectionTemplate(payload, editingId);
+      if (data.error) throw new Error(data.error);
 
       setMessage(editingId ? "采集模板已保存" : "采集模板已创建");
       resetForm();
       await refreshTemplates();
     } catch (requestError) {
-      setError(requestError instanceof Error ? (requestError.message.includes("fetch") ? "网络请求失败，请将 localhost 加入代理排除列表后重试" : requestError.message) : "保存采集模板失败");
+      setError(requestError instanceof Error ? requestError.message : "保存采集模板失败");
     } finally {
       setIsSaving(false);
     }
@@ -339,14 +316,8 @@ export function ImageCollectorManager() {
     setMessage(null);
 
     try {
-      const response = await fetch(`/api/image-collector/templates/${template.id}`, {
-        method: "DELETE",
-      });
-      const data = (await response.json()) as SaveTemplateResponse;
-
-      if (!response.ok) {
-        throw new Error(data.error ?? "归档采集模板失败");
-      }
+      const data = await archiveCollectionTemplate(template.id);
+      if (data.error) throw new Error(data.error);
 
       if (editingId === template.id) {
         resetForm();
@@ -355,7 +326,7 @@ export function ImageCollectorManager() {
       setMessage("采集模板已归档");
       await refreshTemplates();
     } catch (requestError) {
-      setError(requestError instanceof Error ? (requestError.message.includes("fetch") ? "网络请求失败，请将 localhost 加入代理排除列表后重试" : requestError.message) : "归档采集模板失败");
+      setError(requestError instanceof Error ? requestError.message : "归档采集模板失败");
     }
   }
 
@@ -365,25 +336,14 @@ export function ImageCollectorManager() {
     setMessage(null);
 
     try {
-      const response = await fetch(`/api/image-collector/templates/${template.id}/run`, {
-        method: "POST",
-      });
-      const data = (await response.json()) as RunTemplateResponse;
+      const data = await runCollectionTemplate(template.id);
+      if (data.error) throw new Error(data.error);
 
-      if (!response.ok) {
-        throw new Error(data.error ?? "运行采集模板失败");
-      } else {
-        setLastRun(data.run ?? null);
-        setMessage(
-          data.run
-            ? `采集完成：找到 ${data.run.total_found} 张，成功 ${data.run.total_downloaded} 张，失败 ${data.run.total_failed} 张`
-            : "采集运行完成",
-        );
-      }
-
+      setLastRun(data.run as RunDetail | null);
+      setMessage("采集任务已提交");
       await refreshRuns();
     } catch (requestError) {
-      setError(requestError instanceof Error ? (requestError.message.includes("fetch") ? "网络请求失败，请将 localhost 加入代理排除列表后重试" : requestError.message) : "运行采集模板失败");
+      setError(requestError instanceof Error ? requestError.message : "运行采集模板失败");
     } finally {
       setIsRunningId(null);
     }

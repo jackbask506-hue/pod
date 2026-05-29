@@ -2,6 +2,8 @@
 
 import { type FormEvent, useMemo, useState } from "react";
 
+import { fetchProducts } from "@/lib/actions/products";
+
 import type {
   MockupOutputOption,
   ProductAssetOption,
@@ -167,14 +169,10 @@ export function ProductsManager({
     setError(null);
 
     try {
-      const response = await fetch("/api/products", { cache: "no-store" });
-      const data = (await response.json()) as ProductsResponse;
+      const data = await fetchProducts();
+      if (data.error) throw new Error(data.error);
 
-      if (!response.ok) {
-        throw new Error(data.error ?? "读取商品草稿失败");
-      }
-
-      const nextProducts = data.products ?? [];
+      const nextProducts = (data.products ?? []) as ProductDraftView[];
       setProducts(nextProducts);
 
       const nextSelected =
