@@ -390,7 +390,7 @@ export function ImageCollectorManager() {
   }
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
+    <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
       <section className="space-y-6">
         <div className="rounded-md border border-zinc-200 bg-white">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 px-5 py-4">

@@ -320,7 +320,7 @@ export function ProductsManager({
   }
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
+    <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
       <div className="space-y-6">
         <section className="rounded-md border border-zinc-200 bg-white p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">

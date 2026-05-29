@@ -383,8 +383,8 @@ export function MockupTemplatesManager({
   }
 
   return (
-   <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-     <div className="order-1 space-y-6 xl:order-2">
+   <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
+     <div className="space-y-6">
         <section className="rounded-md border border-zinc-200 bg-white p-5">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -600,7 +600,7 @@ export function MockupTemplatesManager({
         </section>
       </div>
 
-      <div className="order-1 space-y-6 xl:order-2">
+      <div className="space-y-6">
         <section className="rounded-md border border-zinc-200 bg-white">
           <div className="border-b border-zinc-200 px-5 py-4">
             <h3 className="text-base font-semibold text-zinc-950">模板列表</h3>

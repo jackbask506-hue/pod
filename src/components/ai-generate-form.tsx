@@ -90,7 +90,7 @@ export function AiGenerateForm({ defaultProvider, productDrafts }: AiGenerateFor
   }
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+    <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
       <section className="rounded-md border border-zinc-200 bg-white p-6">
         <h3 className="text-base font-semibold text-zinc-950">生成上架信息</h3>
         <p className="mt-1 text-sm text-zinc-500">
