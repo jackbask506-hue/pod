@@ -2,21 +2,16 @@
 
 import { createClient } from "@supabase/supabase-js";
 
-function requirePublicEnv(name: string, value: string | undefined) {
-  if (!value) {
-    console.warn(`Missing required public environment variable: ${name}`);
-    return "";
-  }
-
-  return value;
-}
+const PLACEHOLDER_URL = "https://placeholder.supabase.co";
+const PLACEHOLDER_KEY = "placeholder";
 
 export function createSupabaseBrowserClient() {
-  return createClient(
-    requirePublicEnv("NEXT_PUBLIC_SUPABASE_URL", process.env.NEXT_PUBLIC_SUPABASE_URL),
-    requirePublicEnv(
-      "NEXT_PUBLIC_SUPABASE_ANON_KEY",
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    ),
-  );
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || PLACEHOLDER_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || PLACEHOLDER_KEY;
+
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    console.warn("NEXT_PUBLIC_SUPABASE_URL is not set — Supabase calls will fail.");
+  }
+
+  return createClient(url, key);
 }

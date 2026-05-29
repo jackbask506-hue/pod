@@ -2,24 +2,21 @@ import "server-only";
 
 import { createClient } from "@supabase/supabase-js";
 
-function requireServerEnv(name: string, value: string | undefined) {
-  if (!value) {
-    console.warn(`Missing required server environment variable: ${name}`);
-    return "";
-  }
-
-  return value;
-}
+const PLACEHOLDER_URL = "https://placeholder.supabase.co";
+const PLACEHOLDER_KEY = "placeholder";
 
 export function createSupabaseServiceRoleClient() {
-  return createClient(
-    requireServerEnv("NEXT_PUBLIC_SUPABASE_URL", process.env.NEXT_PUBLIC_SUPABASE_URL),
-    requireServerEnv("SUPABASE_SERVICE_ROLE_KEY", process.env.SUPABASE_SERVICE_ROLE_KEY),
-    {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || PLACEHOLDER_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || PLACEHOLDER_KEY;
+
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    console.warn("NEXT_PUBLIC_SUPABASE_URL is not set — Supabase calls will fail.");
+  }
+
+  return createClient(url, key, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
     },
-  );
+  });
 }
