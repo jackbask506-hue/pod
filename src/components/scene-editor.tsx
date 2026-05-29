@@ -36,7 +36,10 @@ export function SceneEditor({
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   const [dragMode, setDragMode] = useState<DragMode>(null);
+  const [imgError, setImgError] = useState(false);
   const dragStart = useRef({ mouseX: 0, mouseY: 0, area: printArea });
+
+  useEffect(() => { setImgError(false); }, [backgroundUrl]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -171,13 +174,19 @@ export function SceneEditor({
       className="relative w-full overflow-hidden rounded-md border border-zinc-300 bg-zinc-100"
       style={{ height: displayHeight || 300 }}
     >
-      {backgroundUrl && (
+      {backgroundUrl && !imgError && (
         <img
           src={backgroundUrl}
           alt="场景底图"
           className="absolute inset-0 h-full w-full object-cover"
           draggable={false}
+          onError={() => setImgError(true)}
         />
+      )}
+      {backgroundUrl && imgError && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <p className="rounded bg-amber-100 px-3 py-1.5 text-xs text-amber-700">底图加载失败，请检查 URL 是否有效</p>
+        </div>
       )}
       <div
         className="absolute border-2 border-dashed border-blue-500 bg-blue-500/20"

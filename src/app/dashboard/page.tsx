@@ -1,11 +1,7 @@
 import { PageShell } from "@/components/page-shell";
+import { fetchDashboardStats } from "@/lib/actions/dashboard";
 
-const summaryCards = [
-  { label: "今日上传", value: "0", note: "等待接入上传流程", color: "from-blue-500 to-blue-600" },
-  { label: "素材总数", value: "0", note: "等待接入素材库", color: "from-emerald-500 to-teal-600" },
-  { label: "处理任务", value: "0", note: "等待接入批处理", color: "from-violet-500 to-purple-600" },
-  { label: "商品草稿", value: "0", note: "等待接入草稿管理", color: "from-amber-500 to-orange-600" },
-];
+export const dynamic = "force-dynamic";
 
 const workflowItems = [
   "上传图片",
@@ -17,11 +13,20 @@ const workflowItems = [
   "导出 Excel 和图片 ZIP",
 ];
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  const stats = await fetchDashboardStats();
+
+  const summaryCards = [
+    { label: "今日上传", value: String(stats.todayUploads), note: "今天新增的素材", color: "from-blue-500 to-blue-600" },
+    { label: "素材总数", value: String(stats.totalAssets), note: "素材库中的图片总量", color: "from-emerald-500 to-teal-600" },
+    { label: "处理中任务", value: String(stats.pendingJobs), note: "等待或正在处理的任务", color: "from-violet-500 to-purple-600" },
+    { label: "商品草稿", value: String(stats.totalDrafts), note: "已创建的商品草稿数", color: "from-amber-500 to-orange-600" },
+  ];
+
   return (
     <PageShell
       title="仪表盘"
-      description="POD 商品图批量处理系统的基础入口，用于查看上传、处理、套图、文案、草稿和导出流程的概览。"
+      description="POD 商品图批量处理系统概览。"
     >
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {summaryCards.map((card) => (

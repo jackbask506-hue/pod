@@ -38,6 +38,7 @@ export function UploadForm() {
   const [isUploading, setIsUploading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [results, setResults] = useState<UploadResult[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
 
   const unsupportedFiles = useMemo(
     () =>
@@ -97,20 +98,36 @@ export function UploadForm() {
 
   return (
     <div className="space-y-6">
-      <form onSubmit={handleSubmit} className="rounded-md border border-zinc-200 bg-white p-6">
-        <div className="space-y-2">
-          <label htmlFor="images" className="block text-sm font-medium text-zinc-950">
-            选择图片
-          </label>
+      <form onSubmit={handleSubmit} className="rounded-xl border border-slate-200/60 bg-white p-6 shadow-sm">
+        <div
+          className={[
+            "relative rounded-lg border-2 border-dashed p-8 text-center transition-colors",
+            isDragging ? "border-emerald-400 bg-emerald-50" : "border-slate-300 hover:border-slate-400",
+          ].join(" ")}
+          onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setIsDragging(false);
+            const dropped = Array.from(e.dataTransfer.files);
+            if (dropped.length > 0) { setFiles(dropped); setResults([]); setMessage(null); }
+          }}
+        >
+          <svg className="mx-auto h-10 w-10 text-slate-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+          </svg>
+          <p className="mt-3 text-sm font-medium text-slate-700">
+            {isDragging ? "松开鼠标上传文件" : "拖拽图片到此处，或点击选择"}
+          </p>
+          <p className="mt-1 text-xs text-slate-500">支持 jpg、jpeg、png、webp，可一次选择多张</p>
           <input
             id="images"
             type="file"
             accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
             multiple
             onChange={handleFileChange}
-            className="block w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 file:mr-4 file:rounded-md file:border-0 file:bg-zinc-950 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-zinc-800"
+            className="absolute inset-0 cursor-pointer opacity-0"
           />
-          <p className="text-xs text-zinc-500">支持 jpg、jpeg、png、webp，可一次选择多张。</p>
         </div>
 
         {files.length > 0 ? (

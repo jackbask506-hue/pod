@@ -179,6 +179,8 @@ export function AssetsGallery({ initialAssets, initialError = null }: AssetsGall
   const [copyrightStatus, setCopyrightStatus] = useState<"all" | CopyrightStatus>("all");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(initialError);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(initialAssets.length);
   const [isResizeDialogOpen, setIsResizeDialogOpen] = useState(false);
   const [resizePresetKey, setResizePresetKey] = useState<ResizePresetKey>("tshirt-print");
   const [resizeJob, setResizeJob] = useState<ResizeJobProgress | null>(null);
@@ -188,6 +190,7 @@ export function AssetsGallery({ initialAssets, initialError = null }: AssetsGall
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteMessage, setDeleteMessage] = useState<string | null>(null);
   const selectedCount = selectedIds.size;
+  const totalPages = Math.ceil(total / 24);
 
   const selectedAssets = useMemo(
     () => assets.filter((asset) => selectedIds.has(asset.id)),
@@ -205,12 +208,13 @@ export function AssetsGallery({ initialAssets, initialError = null }: AssetsGall
   async function fetchAssets(
     nextStatus: "all" | AssetStatus = status,
     nextCopyrightStatus: "all" | CopyrightStatus = copyrightStatus,
+    nextPage: number = page,
   ) {
     setIsLoading(true);
     setError(null);
 
     try {
-      const data = await fetchAssetsAction(nextStatus, nextCopyrightStatus);
+      const data = await fetchAssetsAction(nextStatus, nextCopyrightStatus, nextPage);
 
       if (data.error) {
         throw new Error(data.error);
@@ -218,6 +222,7 @@ export function AssetsGallery({ initialAssets, initialError = null }: AssetsGall
 
       const nextAssets = data.assets as Asset[];
       setAssets(nextAssets);
+      setTotal(data.total);
       setSelectedIds((current) => {
         const visibleIds = new Set(nextAssets.map((asset) => asset.id));
         return new Set(Array.from(current).filter((id) => visibleIds.has(id)));
@@ -233,12 +238,14 @@ export function AssetsGallery({ initialAssets, initialError = null }: AssetsGall
 
   function handleStatusChange(nextStatus: "all" | AssetStatus) {
     setStatus(nextStatus);
-    void fetchAssets(nextStatus, copyrightStatus);
+    setPage(1);
+    void fetchAssets(nextStatus, copyrightStatus, 1);
   }
 
   function handleCopyrightStatusChange(nextCopyrightStatus: "all" | CopyrightStatus) {
     setCopyrightStatus(nextCopyrightStatus);
-    void fetchAssets(status, nextCopyrightStatus);
+    setPage(1);
+    void fetchAssets(status, nextCopyrightStatus, 1);
   }
 
   function toggleAsset(assetId: string) {
@@ -690,6 +697,30 @@ export function AssetsGallery({ initialAssets, initialError = null }: AssetsGall
           })}
         </div>
       ) : null}
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2 pt-4">
+          <button
+            type="button"
+            disabled={page <= 1}
+            onClick={() => { const p = page - 1; setPage(p); void fetchAssets(status, copyrightStatus, p); }}
+            className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            上一页
+          </button>
+          <span className="text-sm text-slate-600">
+            第 {page} / {totalPages} 页（共 {total} 张）
+          </span>
+          <button
+            type="button"
+            disabled={page >= totalPages}
+            onClick={() => { const p = page + 1; setPage(p); void fetchAssets(status, copyrightStatus, p); }}
+            className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            下一页
+          </button>
+        </div>
+      )}
 
       {isResizeDialogOpen ? (
         <div
