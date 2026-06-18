@@ -35,13 +35,42 @@ type UploadFormProps = {
   titleZh?: string;
 };
 
+type UploadQueueStatus = "queued" | "uploading" | "processing" | "success" | "failed";
+
+type UploadQueueItem = {
+  error?: string;
+  fileSize: number;
+  filename: string;
+  id: string;
+  progress: number;
+  result?: UploadResult;
+  status: UploadQueueStatus;
+};
+
 const ACCEPTED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const ACCEPTED_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp"]);
+const UPLOAD_CONCURRENCY = 4;
 
 const sourceLabels: Record<UploadAssetSource, { zh: string; en: string }> = {
   garment_base: { zh: "胚衣底图", en: "Blank Garment" },
   print_transparent: { zh: "透明印花图", en: "Transparent Print" },
   upload_original: { zh: "原图", en: "Original" },
+};
+
+const statusLabels: Record<UploadQueueStatus, { zh: string; en: string }> = {
+  failed: { zh: "失败", en: "Failed" },
+  processing: { zh: "写入中", en: "Saving" },
+  queued: { zh: "排队中", en: "Queued" },
+  success: { zh: "成功", en: "Done" },
+  uploading: { zh: "上传中", en: "Uploading" },
+};
+
+const statusClasses: Record<UploadQueueStatus, string> = {
+  failed: "bg-red-500/10 text-red-600",
+  processing: "bg-cyan-500/10 text-cyan-600",
+  queued: "bg-slate-500/10 text-slate-500",
+  success: "bg-emerald-500/10 text-emerald-600",
+  uploading: "bg-blue-500/10 text-blue-600",
 };
 
 function formatFileSize(size: number) {
@@ -50,6 +79,99 @@ function formatFileSize(size: number) {
   }
 
   return `${(size / 1024 / 1024).toFixed(2)} MB`;
+}
+
+function createUploadId(file: File, index: number) {
+  return `${file.name}-${file.size}-${file.lastModified}-${index}`;
+}
+
+function buildFailedResult(file: File, assetSource: UploadAssetSource, error: string): UploadResult {
+  return {
+    error,
+    file_size: file.size,
+    filename: file.name,
+    source: assetSource,
+    success: false,
+  };
+}
+
+function parseUploadResponse(text: string): UploadResponse | null {
+  try {
+    return JSON.parse(text) as UploadResponse;
+  } catch {
+    return null;
+  }
+}
+
+function uploadSingleFile({
+  assetSource,
+  file,
+  onProcessing,
+  onProgress,
+}: {
+  assetSource: UploadAssetSource;
+  file: File;
+  onProcessing: () => void;
+  onProgress: (progress: number) => void;
+}) {
+  return new Promise<UploadResult>((resolve) => {
+    const formData = new FormData();
+    formData.append("asset_source", assetSource);
+    formData.append("files", file);
+
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/api/upload");
+
+    xhr.upload.onprogress = (event) => {
+      if (!event.lengthComputable || event.total <= 0) {
+        return;
+      }
+
+      onProgress(Math.min(99, Math.round((event.loaded / event.total) * 100)));
+    };
+
+    xhr.upload.onload = () => {
+      onProgress(100);
+      onProcessing();
+    };
+
+    xhr.onload = () => {
+      const data = parseUploadResponse(xhr.responseText);
+
+      if (!data) {
+        resolve(
+          buildFailedResult(
+            file,
+            assetSource,
+            `Server returned a non-JSON response (${xhr.status || "network error"})`,
+          ),
+        );
+        return;
+      }
+
+      const result = data.results?.[0];
+      if (result) {
+        resolve({
+          ...result,
+          error: result.success ? result.error : result.error ?? data.error ?? `Upload failed (${xhr.status})`,
+          source: result.source ?? assetSource,
+        });
+        return;
+      }
+
+      resolve(buildFailedResult(file, assetSource, data.error ?? `Upload failed (${xhr.status})`));
+    };
+
+    xhr.onerror = () => {
+      resolve(buildFailedResult(file, assetSource, "Network error while uploading"));
+    };
+
+    xhr.onabort = () => {
+      resolve(buildFailedResult(file, assetSource, "Upload aborted"));
+    };
+
+    xhr.send(formData);
+  });
 }
 
 export function UploadForm({
@@ -62,6 +184,7 @@ export function UploadForm({
   const [files, setFiles] = useState<File[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [queueItems, setQueueItems] = useState<UploadQueueItem[]>([]);
   const [results, setResults] = useState<UploadResult[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const { isDark, t } = useSettings();
@@ -76,11 +199,45 @@ export function UploadForm({
     [files],
   );
   const successCount = results.filter((result) => result.success).length;
+  const queueStats = useMemo(() => {
+    const total = queueItems.length;
+    const finished = queueItems.filter((item) => item.status === "success" || item.status === "failed").length;
+    const failed = queueItems.filter((item) => item.status === "failed").length;
+    const uploading = queueItems.filter((item) => item.status === "uploading" || item.status === "processing").length;
+    const progress = total
+      ? Math.round(
+          queueItems.reduce((sum, item) => {
+            if (item.status === "success" || item.status === "failed") {
+              return sum + 100;
+            }
+
+            return sum + item.progress;
+          }, 0) / total,
+        )
+      : 0;
+
+    return {
+      failed,
+      finished,
+      progress,
+      total,
+      uploading,
+    };
+  }, [queueItems]);
+
+  function updateQueueItem(id: string, patch: Partial<UploadQueueItem>) {
+    setQueueItems((current) => current.map((item) => (item.id === id ? { ...item, ...patch } : item)));
+  }
+
+  function replaceSelectedFiles(nextFiles: File[]) {
+    setFiles(nextFiles);
+    setMessage(null);
+    setQueueItems([]);
+    setResults([]);
+  }
 
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
-    setFiles(Array.from(event.target.files ?? []));
-    setMessage(null);
-    setResults([]);
+    replaceSelectedFiles(Array.from(event.target.files ?? []));
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -91,28 +248,70 @@ export function UploadForm({
       return;
     }
 
+    const uploadFiles = [...files];
+    const initialQueue = uploadFiles.map((file, index) => ({
+      fileSize: file.size,
+      filename: file.name,
+      id: createUploadId(file, index),
+      progress: 0,
+      status: "queued" as UploadQueueStatus,
+    }));
+    const nextResults: UploadResult[] = new Array(uploadFiles.length);
+    let nextIndex = 0;
+
     setIsUploading(true);
     setMessage(null);
     setResults([]);
+    setQueueItems(initialQueue);
 
-    const formData = new FormData();
-    formData.append("asset_source", assetSource);
-    files.forEach((file) => formData.append("files", file));
+    async function runWorker() {
+      while (nextIndex < uploadFiles.length) {
+        const currentIndex = nextIndex;
+        nextIndex += 1;
+
+        const file = uploadFiles[currentIndex];
+        const item = initialQueue[currentIndex];
+
+        updateQueueItem(item.id, { progress: 0, status: "uploading" });
+
+        const result = await uploadSingleFile({
+          assetSource,
+          file,
+          onProcessing: () => updateQueueItem(item.id, { progress: 100, status: "processing" }),
+          onProgress: (progress) => updateQueueItem(item.id, { progress, status: "uploading" }),
+        });
+
+        nextResults[currentIndex] = result;
+        updateQueueItem(item.id, {
+          error: result.error,
+          progress: 100,
+          result,
+          status: result.success ? "success" : "failed",
+        });
+      }
+    }
 
     try {
-      const response = await fetch("/api/upload", {
-        body: formData,
-        method: "POST",
-      });
-      const data = (await response.json()) as UploadResponse;
+      await Promise.all(
+        Array.from({ length: Math.min(UPLOAD_CONCURRENCY, uploadFiles.length) }, () => runWorker()),
+      );
 
-      setResults(data.results ?? []);
+      const completedResults = nextResults.filter(Boolean);
+      const failedFiles = uploadFiles.filter((_file, index) => !nextResults[index]?.success);
 
-      if (!response.ok && data.error) {
-        setMessage(data.error);
+      setResults(completedResults);
+      setFiles(failedFiles);
+
+      if (completedResults.length === 0) {
+        setMessage(t("上传失败，请稍后重试。", "Upload failed. Please try again later."));
+      } else if (failedFiles.length > 0) {
+        setMessage(
+          t(
+            `有 ${failedFiles.length} 张上传失败，失败文件已保留在待上传列表中，可直接重试。`,
+            `${failedFiles.length} upload${failedFiles.length === 1 ? "" : "s"} failed. Failed files remain selected for retry.`,
+          ),
+        );
       }
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : t("上传失败", "Upload failed"));
     } finally {
       setIsUploading(false);
     }
@@ -121,6 +320,7 @@ export function UploadForm({
   function clearSelection() {
     setFiles([]);
     setMessage(null);
+    setQueueItems([]);
     setResults([]);
   }
 
@@ -188,20 +388,33 @@ export function UploadForm({
               setIsDragging(false);
               const dropped = Array.from(event.dataTransfer.files);
               if (dropped.length > 0) {
-                setFiles(dropped);
-                setResults([]);
-                setMessage(null);
+                replaceSelectedFiles(dropped);
               }
             }}
           >
-            <svg className="mx-auto h-12 w-12 text-slate-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+            <svg
+              className="mx-auto h-12 w-12 text-slate-400"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={1.5}
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5"
+              />
             </svg>
             <p className={["mt-4 text-base font-black", isDark ? "text-slate-100" : "text-slate-800"].join(" ")}>
-              {isDragging ? t("松开鼠标上传文件", "Release to upload files") : t("拖拽图片到此处，或点击选择", "Drag images here, or click to choose")}
+              {isDragging
+                ? t("松开鼠标上传文件", "Release to upload files")
+                : t("拖拽图片到此处，或点击选择", "Drag images here, or click to choose")}
             </p>
             <p className={["mt-2 text-sm", isDark ? "text-slate-400" : "text-slate-500"].join(" ")}>
-              {t("支持 jpg、jpeg、png、webp，可一次选择多张", "Supports jpg, jpeg, png, and webp. Multiple files can be selected.")}
+              {t(
+                `支持 jpg、jpeg、png、webp；前端按 ${UPLOAD_CONCURRENCY} 张并发上传并显示进度`,
+                `Supports jpg, jpeg, png, and webp. Uploads run with ${UPLOAD_CONCURRENCY} concurrent files and visible progress.`,
+              )}
             </p>
             <input
               id={`images-${assetSource}`}
@@ -210,24 +423,39 @@ export function UploadForm({
               multiple
               onChange={handleFileChange}
               className="absolute inset-0 cursor-pointer opacity-0"
+              disabled={isUploading}
             />
           </div>
 
           {files.length > 0 ? (
-            <div className={["mt-5 rounded-xl border p-4", isDark ? "border-white/10 bg-white/[0.04]" : "border-slate-200 bg-slate-50"].join(" ")}>
+            <div
+              className={[
+                "mt-5 rounded-xl border p-4",
+                isDark ? "border-white/10 bg-white/[0.04]" : "border-slate-200 bg-slate-50",
+              ].join(" ")}
+            >
               <div className="flex items-center justify-between gap-3">
                 <p className={["text-sm font-bold", isDark ? "text-slate-100" : "text-slate-950"].join(" ")}>
-                  {t(`已选择 ${files.length} 张图片`, `${files.length} image${files.length === 1 ? "" : "s"} selected`)}
+                  {t(`待上传 ${files.length} 张图片`, `${files.length} image${files.length === 1 ? "" : "s"} ready`)}
                 </p>
                 <button
                   type="button"
                   onClick={clearSelection}
-                  className={["text-sm font-bold", isDark ? "text-slate-300 hover:text-white" : "text-slate-600 hover:text-slate-950"].join(" ")}
+                  disabled={isUploading}
+                  className={[
+                    "text-sm font-bold disabled:cursor-not-allowed disabled:opacity-50",
+                    isDark ? "text-slate-300 hover:text-white" : "text-slate-600 hover:text-slate-950",
+                  ].join(" ")}
                 >
                   {t("清空", "Clear")}
                 </button>
               </div>
-              <ul className={["mt-3 max-h-44 space-y-2 overflow-y-auto text-sm", isDark ? "text-slate-300" : "text-slate-600"].join(" ")}>
+              <ul
+                className={[
+                  "mt-3 max-h-44 space-y-2 overflow-y-auto text-sm",
+                  isDark ? "text-slate-300" : "text-slate-600",
+                ].join(" ")}
+              >
                 {files.map((file) => (
                   <li key={`${file.name}-${file.lastModified}`} className="flex justify-between gap-4">
                     <span className="min-w-0 truncate">{file.name}</span>
@@ -247,6 +475,90 @@ export function UploadForm({
             </div>
           ) : null}
 
+          {queueItems.length > 0 ? (
+            <div
+              className={[
+                "mt-5 rounded-2xl border p-4",
+                isDark ? "border-white/10 bg-slate-950/20" : "border-slate-200 bg-white",
+              ].join(" ")}
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className={["text-sm font-black", isDark ? "text-slate-100" : "text-slate-950"].join(" ")}>
+                    {t("上传队列", "Upload Queue")}
+                  </h3>
+                  <p className={["mt-1 text-xs", isDark ? "text-slate-400" : "text-slate-500"].join(" ")}>
+                    {t(
+                      `总数 ${queueStats.total}，处理中 ${queueStats.uploading}，完成 ${queueStats.finished}，失败 ${queueStats.failed}`,
+                      `Total ${queueStats.total}, active ${queueStats.uploading}, finished ${queueStats.finished}, failed ${queueStats.failed}`,
+                    )}
+                  </p>
+                </div>
+                <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-black text-emerald-600">
+                  {t(`并发 ${UPLOAD_CONCURRENCY}`, `${UPLOAD_CONCURRENCY} concurrent`)}
+                </span>
+              </div>
+
+              <div className="mt-4">
+                <div className="mb-2 flex items-center justify-between text-xs font-bold text-slate-500">
+                  <span>{t("总体进度", "Overall Progress")}</span>
+                  <span>{queueStats.progress}%</span>
+                </div>
+                <div className={["h-2 overflow-hidden rounded-full", isDark ? "bg-white/10" : "bg-slate-100"].join(" ")}>
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-cyan-500 transition-all"
+                    style={{ width: `${queueStats.progress}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="mt-4 max-h-72 space-y-3 overflow-y-auto pr-1">
+                {queueItems.map((item) => {
+                  const statusLabel = statusLabels[item.status];
+
+                  return (
+                    <div
+                      key={item.id}
+                      className={[
+                        "rounded-xl border p-3",
+                        isDark ? "border-white/10 bg-white/[0.04]" : "border-slate-200 bg-slate-50/70",
+                      ].join(" ")}
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className={["truncate text-sm font-bold", isDark ? "text-slate-100" : "text-slate-950"].join(" ")}>
+                            {item.filename}
+                          </p>
+                          <p className="mt-0.5 text-xs text-slate-500">{formatFileSize(item.fileSize)}</p>
+                        </div>
+                        <span className={["rounded-full px-3 py-1 text-xs font-black", statusClasses[item.status]].join(" ")}>
+                          {t(statusLabel.zh, statusLabel.en)}
+                        </span>
+                      </div>
+                      <div className="mt-3 flex items-center gap-3">
+                        <div className={["h-2 flex-1 overflow-hidden rounded-full", isDark ? "bg-white/10" : "bg-slate-200"].join(" ")}>
+                          <div
+                            className={[
+                              "h-full rounded-full transition-all",
+                              item.status === "failed"
+                                ? "bg-red-500"
+                                : item.status === "success"
+                                  ? "bg-emerald-500"
+                                  : "bg-gradient-to-r from-emerald-500 to-cyan-500",
+                            ].join(" ")}
+                            style={{ width: `${item.progress}%` }}
+                          />
+                        </div>
+                        <span className="w-10 text-right text-xs font-bold text-slate-500">{item.progress}%</span>
+                      </div>
+                      {item.error ? <p className="mt-2 text-xs text-red-500">{item.error}</p> : null}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+
           {message ? (
             <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
               {message}
@@ -262,20 +574,28 @@ export function UploadForm({
               {isUploading ? t("上传中...", "Uploading...") : t("开始上传", "Start Upload")}
             </button>
             <span className={["text-sm", isDark ? "text-slate-400" : "text-slate-500"].join(" ")}>
-              {t("系统会按当前入口自动打标。", "The selected category is applied automatically.")}
+              {t("每张图独立上传，失败项会保留，成功项会进入素材库。", "Each image uploads independently. Failed files stay selected; successful files go to assets.")}
             </span>
           </div>
         </div>
       </form>
 
       {results.length > 0 ? (
-        <section className={["overflow-hidden rounded-2xl border", isDark ? "border-white/10 bg-white/[0.04]" : "border-slate-200 bg-white"].join(" ")}>
+        <section
+          className={[
+            "overflow-hidden rounded-2xl border",
+            isDark ? "border-white/10 bg-white/[0.04]" : "border-slate-200 bg-white",
+          ].join(" ")}
+        >
           <div className={["border-b px-6 py-4", isDark ? "border-white/10" : "border-slate-200"].join(" ")}>
             <h3 className={["text-base font-black", isDark ? "text-white" : "text-slate-950"].join(" ")}>
               {t("上传结果", "Upload Results")}
             </h3>
             <p className={["mt-1 text-sm", isDark ? "text-slate-400" : "text-slate-500"].join(" ")}>
-              {t(`成功 ${successCount} 张，失败 ${results.length - successCount} 张`, `${successCount} succeeded, ${results.length - successCount} failed`)}
+              {t(
+                `成功 ${successCount} 张，失败 ${results.length - successCount} 张`,
+                `${successCount} succeeded, ${results.length - successCount} failed`,
+              )}
             </p>
           </div>
           <div className={["divide-y", isDark ? "divide-white/10" : "divide-slate-200"].join(" ")}>
@@ -300,9 +620,7 @@ export function UploadForm({
                   <span
                     className={[
                       "inline-flex rounded-full px-3 py-1 text-xs font-black",
-                      result.success
-                        ? "bg-emerald-500/10 text-emerald-600"
-                        : "bg-red-500/10 text-red-600",
+                      result.success ? "bg-emerald-500/10 text-emerald-600" : "bg-red-500/10 text-red-600",
                     ].join(" ")}
                   >
                     {result.success ? t("上传成功", "Uploaded") : t("上传失败", "Failed")}

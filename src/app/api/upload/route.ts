@@ -18,6 +18,7 @@ const CONTENT_TYPES: Record<string, "image/jpeg" | "image/png" | "image/webp"> =
 
 const UPLOAD_ASSET_SOURCES = ["upload_original", "print_transparent", "garment_base"] as const;
 type UploadAssetSource = (typeof UPLOAD_ASSET_SOURCES)[number];
+type SupabaseServiceClient = ReturnType<typeof createSupabaseServiceRoleClient>;
 
 type UploadResult = {
   asset_id?: string;
@@ -64,7 +65,31 @@ function getCategoryWriteFields(source: UploadAssetSource, originalUrl: string) 
   return {};
 }
 
-async function uploadImage(file: File, assetSource: UploadAssetSource): Promise<UploadResult> {
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  worker: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let nextIndex = 0;
+
+  async function runWorker() {
+    while (nextIndex < items.length) {
+      const currentIndex = nextIndex;
+      nextIndex += 1;
+      results[currentIndex] = await worker(items[currentIndex], currentIndex);
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => runWorker()));
+  return results;
+}
+
+async function uploadImage(
+  supabase: SupabaseServiceClient,
+  file: File,
+  assetSource: UploadAssetSource,
+): Promise<UploadResult> {
   try {
     if (file.size > MAX_FILE_SIZE) {
       throw new Error("文件大小超过限制（最大 20MB）");
@@ -82,7 +107,6 @@ async function uploadImage(file: File, assetSource: UploadAssetSource): Promise<
     }
 
     const contentType = CONTENT_TYPES[metadata.format];
-    const supabase = createSupabaseServiceRoleClient();
     const datePath = new Date().toISOString().slice(0, 10);
     const storagePath = `${datePath}/${randomUUID()}-${sanitizeFilename(file.name)}`;
 
@@ -168,7 +192,8 @@ export async function POST(request: Request) {
     );
   }
 
-  const results = await Promise.all(files.map((file) => uploadImage(file, assetSource)));
+  const supabase = createSupabaseServiceRoleClient();
+  const results = await mapWithConcurrency(files, 4, (file) => uploadImage(supabase, file, assetSource));
   const hasSuccess = results.some((result) => result.success);
 
   return NextResponse.json(
